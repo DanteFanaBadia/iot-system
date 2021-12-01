@@ -55,12 +55,12 @@ Here is technology stack benchmark and selection.
   </thead>
   <tbody>
     <tr>
-      <td>Programming language: python</td>
+      <td>Programming language: JavaScript</td>
       <td>
         <ul>
           <li>Java</li>
           <li>C#</li>
-          <li>JavaScript</li>
+          <li>Python</li>
            <li>Node</li>
         </ul>
       </td>
