@@ -1,37 +1,33 @@
-const database = require('./database');
+const { runQuery, runInsert } = require('./database');
 const device = require('./devices');
 const express = require('express');
 
 const app = express();
 const port = 9000;
+const topic = 'semaphore';
+const stepPerEvent = 10;
 
 app.get('/', (req, res) => {
-  res.send('Hello World!')
+  runQuery('SELECT COUNT(*) FROM loggers;', (row) => {
+    const steps = Number(row[0]['COUNT(*)']) * stepPerEvent;
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify({steps: steps}));
+  });
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening at http://localhost:${port}`)
+  console.log(`App listening at http://localhost:${port}`)
 });
 
-var count = 1;
-
-device.subscribe('topic_1');
-
-timeout = setInterval(function() {
-  count++;
-  device.publish('topic_1', JSON.stringify({
-    count: count
-  }));
-}, Math.max(1000, 1000));
+device.subscribe(topic);
 
 device
-  .on('connect', function() {
-    console.log('connect');
-    device.subscribe('topic_1');
-    device.publish('topic_1', JSON.stringify({ test_data: 1}));
+  .on('connect', () => {
+    console.log(`MQTT listening event: ${topic}`);
   });
 
 device
-  .on('message', function(topic, payload) {
-    console.log('message', topic, payload.toString());
+  .on('message', (topic, payload) => {
+    console.log(`New event: ${topic}`);
+    runInsert(`INSERT INTO loggers(event) VALUES ('${topic}');`);
   });
