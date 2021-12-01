@@ -1,11 +1,14 @@
 const { runQuery, runInsert } = require('./database');
 const device = require('./devices');
 const express = require('express');
+const cors = require('cors')
 
-const app = express();
 const port = 9000;
 const topic = 'semaphore';
 const stepPerEvent = 10;
+const app = express();
+
+app.use(cors())
 
 app.get('/', (req, res) => {
   runQuery('SELECT COUNT(*) FROM loggers;', (row) => {

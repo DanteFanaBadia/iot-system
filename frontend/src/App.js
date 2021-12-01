@@ -1,70 +1,111 @@
 import './App.css';
+import { getMqttClient } from './device';
+import { getSteps } from './api';
+import config from './config';
+import React from 'react';
 
-var AWSConfiguration = {
-  poolId: 'us-east-1:0b0753d6-ae0b-435b-8c3b-24fe61553be2',
-  host: 'a1piehecu3f9hw-ats.iot.us-east-1.amazonaws.com',
-  region: 'us-east-1'
-};
 
-var AWS = require('aws-sdk');
-var AWSIoTData = require('aws-iot-device-sdk');
+class App extends React.Component {
 
-var clientId = 'semaphore-monitor-' + (Math.floor((Math.random() * 100000) + 1));
-AWS.config.region = AWSConfiguration.region;
+   constructor(props) {
+      super(props);
 
-AWS.config.credentials = new AWS.CognitoIdentityCredentials({
-   IdentityPoolId: AWSConfiguration.poolId
-});
-
-const mqttClient = AWSIoTData.device({
-  region: AWS.config.region,
-  host: AWSConfiguration.host,
-  clientId: clientId,
-  protocol: 'wss',
-  maximumReconnectTimeMs: 8000,
-  debug: true,
-  accessKeyId: '',
-  secretKey: '',
-  sessionToken: ''
-});
-var cognitoIdentity = new AWS.CognitoIdentity();
-AWS.config.credentials.get(function(err, data) {
-   if (!err) {
-      var params = {
-         IdentityId: AWS.config.credentials.identityId
-      };
-      cognitoIdentity.getCredentialsForIdentity(params, function(err, data) {
-         if (!err) {
-            mqttClient.updateWebSocketCredentials(data.Credentials.AccessKeyId,
-               data.Credentials.SecretKey,
-               data.Credentials.SessionToken);
-         } else {
-            console.log('error retrieving credentials: ' + err);
-            alert('error retrieving credentials: ' + err);
-         }
+      const mqttClient = getMqttClient();
+      mqttClient.on('connect', () => { 
+         mqttClient.subscribe(config.topic, () => console.log('mqttClient subscribe'));
+         console.log('mqttClient connect');
       });
-   } else {
-      console.log('error retrieving identity:' + err);
-      alert('error retrieving identity: ' + err);
+      mqttClient.on('reconnect', () => console.log('reconnect'));
+
+      this.state = {
+         enable: false,
+         mqttClient: mqttClient,
+         count: 10,
+         steps: 0
+      };
    }
-});
 
-var subscribedToLifeCycleEvents = false;
+   request(){
+      this.state.mqttClient.publish(config.topic, JSON.stringify({}));
+   };
 
-mqttClient.on('connect', () => {
-   if (!subscribedToLifeCycleEvents) {
-      mqttClient.subscribe('topic_1');
-      subscribedToLifeCycleEvents = true;
+   enable(topic, payload){
+      if(this.isEnable())
+         return;
+      this.setState({
+         enable: true,
+         count: 10
+      });
+      this.count();
+   };
+
+   disable(){
+      this.setState({
+         enable: false,
+         count: 10
+      });
+      this.refreshSteps();
+   };
+
+   count(){
+      const repeater = setInterval(() => {
+         let count = this.state.count;
+         if (this.state.count > 0) {
+            count -= 1;
+            this.setState({
+               count
+            });
+         } else {
+            this.disable();
+            clearInterval(repeater);
+         }
+      }, 1000);
    }
-   console.log('connect');
-});
-mqttClient.on('reconnect', () => console.log('reconnect'));
-mqttClient.on('message', (topic, payload) => console.log({topic, payload}));
 
-function App() {
-  return (
-    <div className="App"></div>
-  );
+   refreshSteps(){
+      getSteps()
+         .then((steps) => {
+            this.setState({
+               steps: steps
+            });
+         })
+   }
+
+   componentDidMount() {
+      this.state.mqttClient.on('message', (topic, payload) => this.enable(topic, payload));
+      this.refreshSteps();
+    }
+
+   
+
+   isEnable(){
+      return this.state.enable;
+   }
+
+   render() {
+      const count = this.state.count;
+      const steps = this.state.steps;
+      return (
+            <div className="App">
+               <div className="Screen">
+                  {count}
+                  <br/>
+                  <small>
+                     Steps: {steps}
+                  </small>
+               </div>
+               
+               <div className="Controls">
+                  <button disabled={this.isEnable()} onClick={() => this.request()}>Request</button>
+               </div>
+         
+               <div className="Semaphore">
+                  <div className={ !this.isEnable()? "Light Red" : "Light Red Disable"}></div>
+                  <div className={ this.isEnable()? "Light Green" : "Light Green Disable"}></div>
+               </div>
+            </div>
+         );
+   }
 }
 
 export default App;
